@@ -65,7 +65,7 @@ impl Person {
 
 ```rust
 fn main() {
-let mut person = Person {
+    let mut person = Person {
         name: "Alice".to_string(),
         age: 25,
         number: u24::from(50),
