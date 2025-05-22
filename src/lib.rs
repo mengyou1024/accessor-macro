@@ -55,17 +55,31 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
         let field_name = &field.ident;
         let field_ty = &field.ty;
         let attrs = &field.attrs;
+        let unaligned = attrs.iter().any(|attr| {
+            attr.path.is_ident("accessor") && attr.tokens.to_string().contains("unaligned")
+        });
 
         if attrs
             .iter()
             .any(|attr| attr.path.is_ident("accessor") && attr.tokens.to_string().contains("get"))
         {
             let getter_name = format_ident!("get_{}", field_name.as_ref().unwrap());
-            Some(quote! {
-                pub fn #getter_name(&self) -> &#field_ty {
-                    &self.#field_name
-                }
-            })
+            if !unaligned {
+                Some(quote! {
+                    pub fn #getter_name(&self) -> &#field_ty {
+                        &self.#field_name
+                    }
+                })
+            } else {
+                Some(quote! {
+                    pub fn #getter_name(&self) -> #field_ty {
+                    let filed_ptr = std::ptr::addr_of!(self.#field_name);
+                        unsafe {
+                            filed_ptr.read_unaligned()
+                        }
+                    }
+                })
+            }
         } else {
             None
         }
@@ -96,11 +110,18 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
                         let min_lit = syn::parse_str::<syn::Expr>(min).ok()?;
                         let max_lit = syn::parse_str::<syn::Expr>(max).ok()?;
 
+                        #[cfg(all(debug_assertions, feature = "debug_panic"))]
+                        let out_of_range_handler = Some(quote!{
+                            panic!("field '{}' must be between {} and {}", stringify!(#field_name), #min_lit, #max_lit);
+                        });
+                        #[cfg(any(not(debug_assertions), not(feature = "debug_panic")))]
+                        let out_of_range_handler = Some(quote!{
+                            return false;
+                        });
+
                         Some(quote! {
                             if value < #min_lit || value > #max_lit {
-                                #[cfg(all(debug_assertions, feature = "debug_panic"))]
-                                panic!("field '{}' must be between {} and {}", stringify!(#field_name), #min_lit, #max_lit);
-                                return false;
+                                #out_of_range_handler
                             }
                         })
                     } else {

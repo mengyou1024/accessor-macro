@@ -58,6 +58,7 @@ impl Person {
 
 - get : 为字段生成 getter 方法。
 - set : 为字段生成 setter 方法。
+- unaligned : 未对齐字段。
 - range=[min, max] : 在 setter 方法中添加范围检查，当设置的值超出范围时，返回 false 。
 
 ### 3.  示例代码
