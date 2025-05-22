@@ -2,6 +2,41 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
+/// 为结构体派生 Getter 和 Setter 宏
+///
+/// 此宏会为带有 `accessor(get)` 属性的字段生成 getter 方法
+/// 为带有 `accessor(set)` 属性的字段生成 setter 方法。
+///
+/// 还支持通过 `accessor(range=[min, max])` 对字段设置值时进行范围检查。
+///
+/// # 示例
+///
+/// ```rust
+/// use accessor_macro::Accessor;
+///
+/// #[derive(Accessor, Debug)]
+/// struct Person {
+///    #[accessor(get, set)]
+///    name: String,
+///    #[accessor(get, set, range=[0, 200])]
+///    age: i32,
+/// }
+///
+/// let mut person = Person {
+///     name: "Alice".to_string(),
+///     age: 25,
+/// };
+///
+/// assert!(person.get_name().eq("Alice"));
+/// person.set_name("Bob".to_string());
+/// assert!(person.get_name().eq("Bob"));
+/// assert!(person.set_age(18));
+/// assert!(person.get_age() == &18);
+/// assert!(!person.set_age(-1));
+/// assert!(person.get_age() != &-1);
+/// assert!(!person.set_age(201));
+/// assert!(person.get_age() != &201);
+/// ```
 #[proc_macro_derive(Accessor, attributes(accessor))]
 pub fn accessor_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -60,9 +95,11 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
 
                         let min_lit = syn::parse_str::<syn::Expr>(min).ok()?;
                         let max_lit = syn::parse_str::<syn::Expr>(max).ok()?;
-    
+
                         Some(quote! {
                             if value < #min_lit || value > #max_lit {
+                                #[cfg(all(debug_assertions, feature = "debug_panic"))]
+                                panic!("field '{}' must be between {} and {}", stringify!(#field_name), #min_lit, #max_lit);
                                 return false;
                             }
                         })
