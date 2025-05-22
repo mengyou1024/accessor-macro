@@ -1,0 +1,97 @@
+use proc_macro::TokenStream;
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, Data, DeriveInput, Fields};
+
+#[proc_macro_derive(Accessor, attributes(accessor))]
+pub fn accessor_derive(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    let name = &ast.ident;
+    let fields = if let Data::Struct(data_struct) = &ast.data {
+        if let Fields::Named(fields) = &data_struct.fields {
+            &fields.named
+        } else {
+            panic!("Only structs with named fields are supported");
+        }
+    } else {
+        panic!("Accessor can only be derived for structs");
+    };
+
+    let getters = fields.iter().filter_map(|field| {
+        let field_name = &field.ident;
+        let field_ty = &field.ty;
+        let attrs = &field.attrs;
+
+        if attrs
+            .iter()
+            .any(|attr| attr.path.is_ident("accessor") && attr.tokens.to_string().contains("get"))
+        {
+            let getter_name = format_ident!("get_{}", field_name.as_ref().unwrap());
+            Some(quote! {
+                pub fn #getter_name(&self) -> &#field_ty {
+                    &self.#field_name
+                }
+            })
+        } else {
+            None
+        }
+    });
+
+    let setters = fields.iter().filter_map(|field| {
+        let field_name = &field.ident;
+        let field_ty = &field.ty;
+        let attrs = &field.attrs;
+
+        if attrs
+            .iter()
+            .any(|attr| attr.path.is_ident("accessor") && attr.tokens.to_string().contains("set"))
+        {
+            let setter_name = format_ident!("set_{}", field_name.as_ref().unwrap());
+            let range_check = attrs.iter().find_map(|attr| {
+                if attr.path.is_ident("accessor") {
+                    let tokens = attr.tokens.to_string();
+
+                    if let Some(range_start) = tokens.find("range=[") {
+                        let range_str = &tokens[range_start + 7..];
+                        let end_index = range_str.find(']').unwrap();
+                        let range_values = &range_str[0..end_index];
+                        let mut parts = range_values.split(',');
+                        let min = parts.next().unwrap().trim();
+                        let max = parts.next().unwrap().trim();
+
+                        let min_lit = syn::parse_str::<syn::Expr>(min).ok()?;
+                        let max_lit = syn::parse_str::<syn::Expr>(max).ok()?;
+    
+                        Some(quote! {
+                            if value < #min_lit || value > #max_lit {
+                                return false;
+                            }
+                        })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            });
+
+            Some(quote! {
+                pub fn #setter_name(&mut self, value: #field_ty) -> bool {
+                    #range_check
+                    self.#field_name = value;
+                    true
+                }
+            })
+        } else {
+            None
+        }
+    });
+
+    let expanded = quote! {
+        impl #name {
+            #(#getters)*
+            #(#setters)*
+        }
+    };
+
+    TokenStream::from(expanded)
+}
