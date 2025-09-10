@@ -45,6 +45,8 @@ struct Person {
     self_test_min: i32,
     #[accessor(get, set, range=[self.self_test_min, self.get_test_max()])]
     self_test: i32,
+    #[accessor(get(no_ref), set, range=[0, 100])]
+    no_ref: u24,
 }
 
 impl Person {
@@ -57,6 +59,7 @@ impl Person {
 ### 2.  属性说明
 
 - get : 为字段生成 getter 方法。
+    - no_ref : 不返回引用
 - set : 为字段生成 setter 方法。
 - unaligned : 未对齐字段。
 - range=[min, max] : 在 setter 方法中添加范围检查，当设置的值超出范围时，返回 false 。
@@ -71,6 +74,7 @@ fn main() {
         number: u24::from(50),
         self_test_min: 0,
         self_test: 50,
+        no_ref: u24::from(50),
     };
     println!("person: {:?}", person);
     println!("--------------------------------------");
@@ -99,6 +103,10 @@ fn main() {
     println!("设置self_test为-1, -1 在范围, 返回true");
     assert!(person.set_self_test(-1));
     println!("persion:{:?}", person);
+    println!("--------------------------------------");
+    println!("no_ref");
+    person.self_test_min = -100;
+    assert_eq!(person.get_no_ref(), u24::from(50));
     println!("--------------------------------------");
 }
 ```

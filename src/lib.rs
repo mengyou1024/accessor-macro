@@ -59,24 +59,40 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
             attr.path.is_ident("accessor") && attr.tokens.to_string().contains("unaligned")
         });
 
-        if attrs
-            .iter()
-            .any(|attr| attr.path.is_ident("accessor") && attr.tokens.to_string().contains("get"))
-        {
-            let getter_name = format_ident!("get_{}", field_name.as_ref().unwrap());
-            if !unaligned {
-                Some(quote! {
-                    pub fn #getter_name(&self) -> &#field_ty {
-                        &self.#field_name
+        let mut no_ref = false;
+
+        if attrs.iter().any(|attr| {
+            let param_string = attr.tokens.to_string();
+            if let Some(param_start) = param_string.find("get(") {
+                if let Some(param_end) = param_string[param_start..].find(')') {
+                    let params = &param_string[param_start + 4..=param_end];
+                    if params.contains("no_ref") {
+                        no_ref = true;
                     }
-                })
-            } else {
+                }
+            }
+            attr.path.is_ident("accessor") && attr.tokens.to_string().contains("get")
+        }) {
+            let getter_name = format_ident!("get_{}", field_name.as_ref().unwrap());
+            if unaligned {
                 Some(quote! {
                     pub fn #getter_name(&self) -> #field_ty {
                     let filed_ptr = std::ptr::addr_of!(self.#field_name);
                         unsafe {
                             filed_ptr.read_unaligned()
                         }
+                    }
+                })
+            } else if no_ref {
+                Some(quote! {
+                    pub fn #getter_name(&self) -> #field_ty {
+                        self.#field_name
+                    }
+                })
+            } else {
+                Some(quote! {
+                    pub fn #getter_name(&self) -> &#field_ty {
+                        &self.#field_name
                     }
                 })
             }
