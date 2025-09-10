@@ -1,6 +1,6 @@
 [package]
 name = "accessor-macro"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["mengyou1024 <mengyou1024@126.com>"]
 description = "This library provides a derive macro for generating accessor methods with optional value range checks in Rust structs"

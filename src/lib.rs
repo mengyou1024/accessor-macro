@@ -59,6 +59,12 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
             attr.path.is_ident("accessor") && attr.tokens.to_string().contains("unaligned")
         });
 
+        // 提取字段的文档注释
+        let doc_comments: Vec<_> = attrs
+            .iter()
+            .filter(|attr| attr.path.is_ident("doc"))
+            .collect();
+
         let mut no_ref = false;
 
         if attrs.iter().any(|attr| {
@@ -76,8 +82,9 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
             let getter_name = format_ident!("get_{}", field_name.as_ref().unwrap());
             if unaligned {
                 Some(quote! {
+                    #(#doc_comments)*
                     pub fn #getter_name(&self) -> #field_ty {
-                    let filed_ptr = std::ptr::addr_of!(self.#field_name);
+                        let filed_ptr = std::ptr::addr_of!(self.#field_name);
                         unsafe {
                             filed_ptr.read_unaligned()
                         }
@@ -85,12 +92,14 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
                 })
             } else if no_ref {
                 Some(quote! {
+                    #(#doc_comments)*
                     pub fn #getter_name(&self) -> #field_ty {
                         self.#field_name
                     }
                 })
             } else {
                 Some(quote! {
+                    #(#doc_comments)*
                     pub fn #getter_name(&self) -> &#field_ty {
                         &self.#field_name
                     }
@@ -105,6 +114,12 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
         let field_name = &field.ident;
         let field_ty = &field.ty;
         let attrs = &field.attrs;
+
+        // 提取字段的文档注释
+        let doc_comments: Vec<_> = attrs
+            .iter()
+            .filter(|attr| attr.path.is_ident("doc"))
+            .collect();
 
         if attrs
             .iter()
@@ -149,6 +164,7 @@ pub fn accessor_derive(input: TokenStream) -> TokenStream {
             });
 
             Some(quote! {
+                #(#doc_comments)*
                 pub fn #setter_name(&mut self, value: #field_ty) -> bool {
                     #range_check
                     self.#field_name = value;
